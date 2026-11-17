@@ -4,6 +4,8 @@ Ranks infill drilling campaigns by potential geometric conversion of one metal w
 
 The target platform is **Windows 10/11**. macOS also works and is covered briefly at the end.
 
+**New users:** follow the step-by-step [Setup and User Guide](docs/SETUP_GUIDE.md). It covers installation, preparing your CSV files, the workflow through each page, and troubleshooting. This README is the short version.
+
 ## Install and run on Windows
 
 Use PowerShell from the project folder.
