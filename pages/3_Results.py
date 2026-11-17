@@ -14,7 +14,7 @@ from engine import exports, pipeline
 from engine.costs import CostModel
 from engine.holes import direction
 from engine.scenarios import COMPARISON_NOTE
-from engine.storage import Project, safe_name
+from engine.storage import safe_name
 
 MAX_POINTS = 30_000
 SEED = 12345
@@ -44,9 +44,14 @@ grade_unit = settings.get("blocks", {}).get("grade_unit", "%")
 def recalculate_button(key: str) -> None:
     if st.button("Recalculate", key=key, type="primary"):
         bar = st.progress(0.0)
-        run = pipeline.run_scenario(
-            p, settings.get("name", "Scenario"), settings=settings, scenario_id=sid,
-            progress=lambda msg, frac: bar.progress(min(frac, 1.0), text=msg))
+        try:
+            run = pipeline.run_scenario(
+                p, settings.get("name", "Scenario"), settings=settings, scenario_id=sid,
+                progress=lambda msg, frac: bar.progress(min(frac, 1.0), text=msg))
+        except (ValueError, KeyError, FileNotFoundError) as exc:
+            bar.empty()
+            st.error(f"This scenario could not be recalculated with the current files: {exc}")
+            return
         st.session_state["scenario_id"] = run.scenario_id
         st.rerun()
 
@@ -76,28 +81,18 @@ run_info = settings.get("run_info", {})
 # --------------------------------------------------------------------------- cached loads
 
 def _hashes_key() -> str:
-    return json.dumps(settings.get("input_hashes", {}), sort_keys=True)
+    """Stored and current input hashes, so a replaced file is never served from cache."""
+    return json.dumps([settings.get("input_hashes", {}), p.input_hashes()], sort_keys=True)
 
 
-@st.cache_data(show_spinner=False)
-def cached_blocks(path: str, scenario: str, hashes: str) -> pd.DataFrame:
-    proj = Project.open(path)
-    s, _ = proj.load_scenario(scenario)
-    return pipeline.load_blocks(proj, s)[1][["block_id", "x", "y", "z"]]
-
-
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=2)
 def cached_drilling(path: str, scenario: str, hashes: str, interval: float) -> pd.DataFrame:
-    proj = Project.open(path)
-    s, _ = proj.load_scenario(scenario)
-    return pipeline.load_drilling(proj, s, interval).points
+    return pipeline.load_drilling(p, settings, interval).points
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=2)
 def cached_sites(path: str, scenario: str, hashes: str) -> pd.DataFrame:
-    proj = Project.open(path)
-    s, _ = proj.load_scenario(scenario)
-    return pipeline.load_sites(proj, s)
+    return pipeline.load_sites(p, settings)
 
 
 def downsample(df: pd.DataFrame) -> pd.DataFrame:
@@ -152,7 +147,8 @@ st.plotly_chart(fig, use_container_width=True)
 comparison = results.get("comparison")
 if comparison is not None and len(comparison):
     section("Manual vs optimised")
-    st.dataframe(comparison, hide_index=True, use_container_width=True)
+    st.dataframe(exports.comparison_table(comparison, grade_unit), hide_index=True,
+                 use_container_width=True)
     st.caption(COMPARISON_NOTE)
 
 # --------------------------------------------------------------------------- 4. holes
@@ -182,9 +178,10 @@ show_holes = cols[4].checkbox("Selected planned holes", value=True)
 
 traces, captions = [], []
 try:
-    if (show_target or show_conv) and len(wide):
-        xyz = cached_blocks(path, sid, _hashes_key())
-        j = xyz.merge(wide[["block_id", "eligible", f"converted_{bi}"]], on="block_id")
+    if (show_target or show_conv) and len(wide) and "x" not in wide:
+        st.caption("Recalculate this scenario to show its blocks in the 3D view.")
+    elif (show_target or show_conv) and len(wide):
+        j = wide  # block centroids are saved with the scenario's own results
         for flag, mask, name, colour in (
                 (show_target, j["eligible"].astype(bool), "Target blocks", "#bbbbbb"),
                 (show_conv, j[f"converted_{bi}"].astype(bool), "Potentially converted blocks",
@@ -248,8 +245,9 @@ if comparison is not None and len(comparison):
                          mime="text/csv")
 d = st.columns(2)
 if len(wide):
+    # Built only when clicked: at a million blocks this file takes several seconds to write.
     d[0].download_button("Block results for chosen budget (CSV)",
-                         exports.csv_bytes(exports.blocks_table(
+                         lambda: exports.csv_bytes(exports.blocks_table(
                              pipeline.blocks_for_budget(wide, bi), grade_unit)),
                          file_name=safe_name(f"{base}_blocks_budget_{int(row['budget'])}.csv"),
                          mime="text/csv")
@@ -258,12 +256,14 @@ d[1].download_button("Scenario settings (JSON)", exports.scenario_json_bytes(set
 
 # --------------------------------------------------------------------------- 7. details
 
-with st.expander("Warnings"):
+with st.expander("Warnings and assumptions"):
     warns = run_info.get("warnings", [])
     if warns:
         st.markdown("\n".join(f"- {w}" for w in warns))
     else:
         st.write("No warnings.")
+    for a in run_info.get("assumptions", []):
+        st.caption(f"Assumption: {a}")
 with st.expander("Run log"):
     st.code("\n".join(run_info.get("log", [])) or "No log.", language=None)
 with st.expander("Known limitations"):

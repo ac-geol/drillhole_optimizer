@@ -6,6 +6,8 @@ import pytest
 
 from engine import schema
 from engine.candidates import (
+    BYTES_PER_CANDIDATE,
+    BYTES_PER_ENTRY,
     CandidateSettings,
     Range,
     angular_conflict_pairs,
@@ -128,7 +130,7 @@ def test_size_estimate_warnings():
     e = estimate_size(100, xyz, s, 50.0)
     assert e.warnings == []
     assert 0 < e.est_entries <= 100 * 5000
-    assert e.est_bytes == e.est_entries * 8 + 100 * 8
+    assert e.est_bytes == e.est_entries * BYTES_PER_ENTRY + 100 * BYTES_PER_CANDIDATE
     e = estimate_size(20_000, xyz, s, 50.0)
     assert any("coarser" in w for w in e.warnings)
     e = estimate_size(14_000, xyz, s, 1e6)  # every block in reach of every hole

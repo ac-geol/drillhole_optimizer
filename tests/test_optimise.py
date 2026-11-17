@@ -147,3 +147,17 @@ def test_matrix_drops_useless_candidates():
     cm = build_candidate_matrix(ctx, cands)
     assert cm.n_dropped == 1 and set(cm.candidates["site_id"]) == {"S1", "S2"}
     assert cm.matrix.dtype == np.float32
+
+
+def test_warm_start_survives_time_limit():
+    # With no search time at all, the previous budget's plan must still be kept, so
+    # conversion cannot fall as the budget rises (spec 9, change 12).
+    ctx, cands = _pair_setup()
+    cm = build_candidate_matrix(ctx, cands)
+    full = optimise(cm, None, budget=25_000, cost_model=COST, settings=FAST)
+    ids = list(full.holes["hole_id"])
+    assert len(ids) == 2
+    no_time = OptimiserSettings(restarts=3, time_limit_s=0.0)
+    res = optimise(cm, None, budget=40_000, cost_model=COST, settings=no_time, initial=ids)
+    assert set(ids) <= set(res.holes["hole_id"])
+    assert res.search_metal >= full.search_metal

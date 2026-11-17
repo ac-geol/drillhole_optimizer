@@ -145,3 +145,24 @@ def test_cache_roundtrip(tmp_path):
     p.cache_save(k3, m)
     got = p.cache_load(k3)
     assert sp.issparse(got) and got.format == "csc" and (got != m).nnz == 0
+
+
+def test_mixed_type_column_is_stored(tmp_path):
+    # A long column that is numeric at the top and text further down must still convert
+    # to Parquet (pandas' chunked reader would leave it holding both ints and strings).
+    p = Project.create(tmp_path, "P")
+    rows = ["id,dom"] + [f"{i},{i}" for i in range(300_000)] + ["x,OX1"]
+    p.save_input("blocks", "\n".join(rows).encode(), "b.csv")
+    df = p.load_input("blocks")
+    assert len(df) == 300_001 and df["dom"].iloc[-1] == "OX1"
+
+
+def test_list_and_partial_load(tmp_path):
+    p = Project.create(tmp_path, "P")
+    sid = p.save_scenario(_settings(p), _results())
+    dup = p.duplicate_scenario(sid, "Copy")
+    flags = {s["id"]: s["has_results"] for s in p.list_scenarios()}
+    assert flags == {sid: True, dup: False}
+    settings, none = p.load_scenario(sid, tables=[])
+    assert none == {} and settings["name"] == "Run 1"
+    assert set(p.load_scenario(sid, tables=["summary"])[1]) == {"summary"}

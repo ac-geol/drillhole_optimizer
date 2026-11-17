@@ -22,8 +22,7 @@ def scenario_json_bytes(settings: dict) -> bytes:
 
 
 def _labels(series: pd.Series, labels: dict) -> pd.Series:
-    mapping = {int(k): v for k, v in labels.items()}
-    return series.map(lambda r: mapping.get(int(r)) if pd.notna(r) else None)
+    return series.map({int(k): v for k, v in labels.items()})
 
 
 def holes_table(holes: pd.DataFrame, cost_model: CostModel) -> pd.DataFrame:

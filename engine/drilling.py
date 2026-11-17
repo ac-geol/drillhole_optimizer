@@ -93,6 +93,11 @@ def prepare_route_a(raw: pd.DataFrame, mapping: DrillingMapping) -> DrillingImpo
     """Clean a desurveyed point table into SUPPORT_COLUMNS (plus `domain` if mapped)."""
     n_rows = len(raw)
     reasons: dict[str, int] = {}
+    absent = [c for c in (mapping.hole_id, mapping.x, mapping.y, mapping.z, mapping.valid,
+                          mapping.domain) if c is not None and c not in raw.columns]
+    if absent:
+        raise ValueError("The drilling file has no column named " + ", ".join(absent)
+                         + ". Re-map its columns on the Project page.")
     df = pd.DataFrame({
         "hole_id": _clean_ids(raw[mapping.hole_id]),
         "x": _numeric(raw[mapping.x]),

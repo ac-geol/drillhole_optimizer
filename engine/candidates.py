@@ -18,7 +18,10 @@ from engine.holes import direction
 _EPS = 1e-9
 MAX_CANDIDATES_WARN = 15_000
 MAX_BYTES_WARN = 2 * 1024**3
-BYTES_PER_ENTRY = 8
+# Working memory per matrix entry during a run, not just the stored table: the float32
+# value and int32 row index on disk (8 bytes) plus the search's float64 and int64 working
+# copies, column index, active-entry index and row-ordered copy (8 bytes each).
+BYTES_PER_ENTRY = 48
 BYTES_PER_CANDIDATE = 8
 
 

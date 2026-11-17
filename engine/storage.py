@@ -9,6 +9,8 @@ import math
 import os
 import re
 import shutil
+import zipfile
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
@@ -86,7 +88,10 @@ def parse_csv(data: bytes) -> pd.DataFrame:
     last: Exception | None = None
     for enc in _CSV_ENCODINGS:
         try:
-            return pd.read_csv(io.BytesIO(data), encoding=enc)
+            # low_memory=False types each column from the whole file. The default reads in
+            # chunks and can leave a column holding both numbers and text, which Parquet
+            # cannot store.
+            return pd.read_csv(io.BytesIO(data), encoding=enc, low_memory=False)
         except UnicodeDecodeError as exc:
             last = exc
     raise ValueError(f"Could not decode CSV as UTF-8 or Windows-1252: {last}")
@@ -201,7 +206,8 @@ class Project:
             if p.is_file():
                 with np.load(p) as z:
                     return {k: z[k] for k in z.files}
-        except (OSError, ValueError, KeyError):  # corrupt or partial cache is a miss, not an error
+        except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+            # a corrupt or partial cache file is a miss, not an error
             return None
         return None
 
@@ -249,10 +255,15 @@ class Project:
         """Save a new scenario, or overwrite ``scenario_id`` when recalculating it."""
         return self._write_scenario(settings, results, scenario_id)
 
-    def load_scenario(self, scenario_id: str) -> tuple[dict, dict[str, pd.DataFrame]]:
+    def load_scenario(self, scenario_id: str, tables: Iterable[str] | None = None
+                      ) -> tuple[dict, dict[str, pd.DataFrame]]:
+        """Settings and result tables. Pass ``tables`` to read only those (the block
+        table is large); an empty list reads the settings alone."""
         folder = self._scen_dir / safe_name(scenario_id)
         settings = _read_json(folder / "scenario.json")
-        results = {p.stem: pd.read_parquet(p) for p in sorted(folder.glob("*.parquet"))}
+        wanted = None if tables is None else set(tables)
+        results = {p.stem: pd.read_parquet(p) for p in sorted(folder.glob("*.parquet"))
+                   if wanted is None or p.stem in wanted}
         return settings, results
 
     def list_scenarios(self) -> list[dict]:
@@ -265,7 +276,8 @@ class Project:
                 continue
             s = _read_json(sj)
             out.append({"id": folder.name, "name": s.get("name", folder.name),
-                        "created": s.get("created"), "stale": self.is_stale(s)})
+                        "created": s.get("created"), "stale": self.is_stale(s),
+                        "has_results": (folder / "summary.parquet").is_file()})
         return out
 
     def duplicate_scenario(self, scenario_id: str, new_name: str) -> str:

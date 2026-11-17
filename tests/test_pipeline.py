@@ -5,6 +5,7 @@ All data is SYNTHETIC.
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from engine import exports
 from engine.pipeline import blocks_for_budget, default_planning, run_scenario
@@ -75,6 +76,8 @@ def test_end_to_end_and_exports(tmp_path):
         text = exports.csv_bytes(table).decode()
         assert text.startswith("# Planning estimate")
     assert "metal_kg" in exports.blocks_table(blocks, "g/t").columns
+    assert {"x", "y", "z"} <= set(run.results["blocks"].columns)  # for the 3D view
+    assert run.settings["run_info"]["assumptions"]  # drilling assumptions reach the results
 
 
 def test_11_scenario_reproducibility(tmp_path):
@@ -102,3 +105,11 @@ def test_14_stale_after_input_replaced(tmp_path):
     assert rerun.scenario_id == run.scenario_id
     assert not p.is_stale(rerun.settings)
     assert [s["id"] for s in p.list_scenarios()] == [run.scenario_id]
+
+
+def test_replaced_file_with_other_headers_is_a_plain_error(tmp_path):
+    p = _project(tmp_path)
+    sites = p.load_input("sites").rename(columns={"E": "EASTING"})
+    p.save_input("sites", _csv(sites), "SYNTHETIC_sites_renamed.csv")
+    with pytest.raises(ValueError, match="no column named E"):
+        run_scenario(p, "Broken mapping")

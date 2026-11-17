@@ -83,3 +83,19 @@ def test_manual_comparison_splits():
                             for k in ("Both plans", "Manual only", "Optimised only"))
     assert both + m_only == pytest.approx(t.loc["Manual", "converted_metal"])
     assert both + o_only == pytest.approx(t.loc["Optimised", "converted_metal"])
+
+
+def test_repeated_budget_runs_once():
+    ctx, cm, _ = _field()
+    runs = run_budgets(ctx, cm, None, [60_000, 60_000.0, 30_000], INDEPENDENT, COST, FAST)
+    assert [r.budget for r in runs] == [30_000.0, 60_000.0]
+    assert not holes_frame(runs).duplicated(["budget", "hole_id"]).any()
+    assert not any(line.startswith("Note:") for r in runs for line in r.log)
+
+
+def test_manual_plan_missing_column_is_a_plain_error():
+    raw = pd.DataFrame({"ID": ["M1"], "E": [0.0]})
+    cols = {"hole_id": "ID", "x": "E", "y": "N", "z": "RL", "azimuth": "AZ", "dip": "DIP",
+            "length": "LEN"}
+    with pytest.raises(ValueError, match="no column named N, RL"):
+        prepare_manual_plan(raw, cols, None)

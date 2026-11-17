@@ -64,15 +64,16 @@ def format_budgets(budgets) -> str:
     return ", ".join(f"{b:.0f}" if float(b).is_integer() else f"{b:g}" for b in budgets)
 
 
-@st.cache_resource(show_spinner="Preparing block and drilling geometry...")
-def cached_context(path: str, hashes_json: str, settings_json: str):
-    """Selected blocks and baseline, keyed on project path, input hashes and settings."""
+@st.cache_resource(show_spinner="Preparing block and drilling geometry...", max_entries=2)
+def cached_context(path: str, inputs_json: str, settings_json: str):
+    """Selected blocks and baseline, keyed on project path, input files, saved mappings
+    and the planning settings that change the geometry."""
     planning = json.loads(settings_json)
     return pipeline.build_project_context(Project.open(Path(path)), planning=planning)
 
 
 @st.cache_resource(show_spinner="Counting candidate holes...")
-def cached_candidate_count(path: str, hashes_json: str, cand_json: str) -> int:
+def cached_candidate_count(path: str, inputs_json: str, cand_json: str) -> int:
     p = Project.open(Path(path))
     cs = pipeline.candidate_settings_of({"candidates": json.loads(cand_json)})
     return len(candidates.generate_candidates(pipeline.load_sites(p), cs))
@@ -218,24 +219,28 @@ except ValueError as exc:
     st.error(str(exc))
 
 if cand_settings is not None and sites is not None:
-    hashes_json = json.dumps(p.input_hashes(), sort_keys=True)
-    n_cand = cached_candidate_count(str(p.root), hashes_json, json.dumps(cand_plan))
+    # Mappings are part of the key: a new domain filter or column choice on the Project
+    # page changes the eligible blocks without changing any file.
+    inputs_json = json.dumps({"hashes": p.input_hashes(),
+                              **{k: p.settings.get(k) for k in ("blocks", "drilling", "sites")}},
+                             sort_keys=True)
+    n_cand = cached_candidate_count(str(p.root), inputs_json, json.dumps(cand_plan))
     st.metric("Candidate holes", f"{n_cand:,}")
     if thresholds is not None and target > source:
         ctx_json = json.dumps({k: new_plan[k] for k in (
             "source_class", "target_class", "thresholds", "cost", "support_interval")},
             sort_keys=True)
         try:
-            ctx = cached_context(str(p.root), hashes_json, ctx_json)
+            ctx = cached_context(str(p.root), inputs_json, ctx_json)
         except ValueError as exc:
             errors.append(str(exc))
             st.error(str(exc))
         else:
             est = candidates.estimate_size(n_cand, ctx.xyz[ctx.eligible], cand_settings,
                                            3.0 * thresholds.for_rank(target))
-            st.caption(f"Eligible blocks: {int(ctx.eligible.sum()):,}. Estimated memory for "
-                       f"the candidate distance table: {est.est_bytes / 1024**2:,.0f} MB "
-                       f"(about {est.est_entries:,} entries).")
+            st.caption(f"Eligible blocks: {int(ctx.eligible.sum()):,}. Estimated working "
+                       f"memory for the candidate distance table: up to "
+                       f"{est.est_bytes / 1024**2:,.0f} MB (about {est.est_entries:,} entries).")
             for w in est.warnings:
                 st.warning(w)
 

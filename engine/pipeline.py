@@ -119,7 +119,11 @@ def load_blocks(project: Project, settings: dict | None = None) -> tuple[BlockMo
     return imp, filter_domain(imp.blocks, s.get("domains") or None)
 
 
-def _renamed(df: pd.DataFrame, columns: dict[str, str]) -> pd.DataFrame:
+def _renamed(df: pd.DataFrame, columns: dict[str, str], what: str) -> pd.DataFrame:
+    absent = [v for v in columns.values() if v and v not in df.columns]
+    if absent:  # typically a replaced file whose headers differ from the saved mapping
+        raise ValueError(f"The {what} file has no column named {', '.join(absent)}. "
+                         "Re-map its columns on the Project page.")
     return pd.DataFrame({k: df[v] for k, v in columns.items() if v})
 
 
@@ -128,18 +132,18 @@ def load_drilling(project: Project, settings: dict | None = None,
     s = (settings or project.settings)["drilling"]
     if s.get("route", "A") == "A":
         return prepare_route_a(_require(project, "drilling"), DrillingMapping(**s["mapping"]))
-    collars = _renamed(_require(project, "collars"), s["collars"])
-    surveys = _renamed(_require(project, "surveys"), s["surveys"])
+    collars = _renamed(_require(project, "collars"), s["collars"], "collars")
+    surveys = _renamed(_require(project, "surveys"), s["surveys"], "surveys")
     raw_int = project.load_input("intervals")
-    intervals = _renamed(raw_int, s["intervals"]) if raw_int is not None and s.get("intervals") \
-        else None
+    intervals = _renamed(raw_int, s["intervals"], "intervals") \
+        if raw_int is not None and s.get("intervals") else None
     return desurvey_route_b(collars, surveys, intervals, interval=interval,
                             positive_down=bool(s.get("positive_down", False)))
 
 
 def load_sites(project: Project, settings: dict | None = None) -> pd.DataFrame:
     s = (settings or project.settings)["sites"]
-    out = _renamed(_require(project, "sites"), s["columns"])
+    out = _renamed(_require(project, "sites"), s["columns"], "drill sites")
     out["site_id"] = out["site_id"].astype(str).str.strip()
     for c in ("x", "y", "z"):
         out[c] = pd.to_numeric(out[c], errors="coerce")
@@ -170,13 +174,18 @@ def _hashes(project: Project, kinds) -> dict:
 
 
 def build_project_context(project: Project, settings: dict | None = None,
-                          planning: dict | None = None) -> EvaluationContext:
-    """Selected blocks, support and baseline distances (cached on disk by input hash)."""
+                          planning: dict | None = None,
+                          drilling: DrillingImport | None = None) -> EvaluationContext:
+    """Selected blocks, support and baseline distances (cached on disk by input hash).
+
+    Pass ``drilling`` to reuse an import already loaded with the same settings.
+    """
     settings = settings or project.settings
     planning = planning or settings.get("planning") or default_planning()
     _, blocks = load_blocks(project, settings)
     interval = float(planning["support_interval"])
-    drilling = load_drilling(project, settings, interval)
+    if drilling is None:
+        drilling = load_drilling(project, settings, interval)
     th = thresholds_of(planning)
     key = project.cache_key("baseline", _hashes(project, ("blocks", "drilling", "collars",
                                                           "surveys", "intervals")),
@@ -254,7 +263,8 @@ def run_scenario(project: Project, name: str, settings: dict | None = None,
 
     say("Loading inputs and baseline geometry", 0.02)
     sites = load_sites(project, settings)
-    ctx = build_project_context(project, settings, planning)
+    drilling = load_drilling(project, settings, float(planning["support_interval"]))
+    ctx = build_project_context(project, settings, planning, drilling)
     say("Building candidate distances", 0.15)
     cm = build_project_matrix(project, ctx, sites, planning, settings)
     manual = load_manual(project, sites, settings) if planning.get("use_manual", True) else None
@@ -269,6 +279,8 @@ def run_scenario(project: Project, name: str, settings: dict | None = None,
     wide = runs[0].result.blocks[["block_id", "uploaded_class", "baseline_metric",
                                   "baseline_class", "eligible", "discrepancy", "tonnes",
                                   "metal"]].copy() if runs else pd.DataFrame()
+    if runs:  # centroids, so the 3D view draws a scenario from its own saved results
+        wide["x"], wide["y"], wide["z"] = ctx.xyz[:, 0], ctx.xyz[:, 1], ctx.xyz[:, 2]
     for i, r in enumerate(runs):
         b = r.result.blocks
         wide[f"post_metric_{i}"] = b["post_metric"].to_numpy()
@@ -302,6 +314,7 @@ def run_scenario(project: Project, name: str, settings: dict | None = None,
             "discrepancy_metal": float(ctx.blocks["metal"].to_numpy()[ctx.discrepancy].sum()),
             "candidates_used": int(cm.matrix.shape[1]),
             "candidates_dropped": int(cm.n_dropped),
+            "assumptions": list(drilling.assumptions),
             "warnings": warnings,
             "log": [line for r in runs for line in [f"Budget {r.budget:,.0f}:"] + r.log],
         },

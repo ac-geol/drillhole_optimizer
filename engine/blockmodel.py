@@ -105,6 +105,7 @@ def prepare_block_model(raw: pd.DataFrame, mapping: BlockModelMapping) -> BlockM
         "null density": blocks["density"].isna(),
         "null grade": blocks["grade"].isna(),
         "non-positive density": blocks["density"] <= 0,
+        "negative grade": blocks["grade"] < 0,  # an unlisted null code, e.g. -9999
         "non-positive block dimension": (blocks[_DIMS] <= 0).any(axis=1),
     }
     invalid = pd.Series(False, index=idx)

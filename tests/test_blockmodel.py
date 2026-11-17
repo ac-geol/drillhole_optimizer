@@ -129,11 +129,12 @@ def test_sentinels_and_blanks_excluded_and_counted():
 
 def test_custom_sentinel_list():
     raw = synthetic_model()
-    raw.loc[0, "AU"] = -99.0  # not a sentinel any more
+    raw.loc[0, "AU"] = -99.0  # not a sentinel any more, but still excluded as negative
     raw.loc[1, "AU"] = 9999.0
-    res = prepare_block_model(raw, mapping(null_sentinels=[9999.0]))
-    assert res.n_invalid == 1
-    assert bool(res.blocks.loc[0, "valid"]) and not bool(res.blocks.loc[1, "valid"])
+    raw.loc[2, "DENS"] = 99.0  # would be a null under the default list; a real value here
+    res = prepare_block_model(raw, mapping(null_sentinels=[9999.0, -99.5]))
+    assert res.invalid_reasons == {"null grade": 1, "negative grade": 1}
+    assert bool(res.blocks.loc[2, "valid"]) and not bool(res.blocks.loc[1, "valid"])
 
 
 def test_non_positive_density_and_dims_have_own_reasons():
@@ -188,3 +189,12 @@ def test_missing_required_mapping_raises():
         prepare_block_model(raw, mapping(columns=no_grade))
     with pytest.raises(ValueError, match="not in the uploaded file"):
         prepare_block_model(raw, mapping(columns=dict(COLS, grade="NOPE")))
+
+
+def test_negative_grade_is_invalid():
+    raw = synthetic_model()
+    raw.loc[0, "AU"] = -9999.0  # a null code that is not in the sentinel list
+    res = prepare_block_model(raw, mapping())
+    assert res.invalid_reasons == {"negative grade": 1}
+    assert not bool(res.blocks.loc[0, "valid"])
+    assert (summarise_by_class(res.blocks)["metal"] >= 0).all()

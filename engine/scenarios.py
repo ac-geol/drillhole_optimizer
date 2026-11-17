@@ -33,6 +33,10 @@ def prepare_manual_plan(raw: pd.DataFrame, columns: dict[str, str], sites: pd.Da
     x, y, z, azimuth, dip, length. A hole without a site_id is matched to a site whose
     collar lies within ``match_tolerance`` m; otherwise its collar is its own site.
     """
+    absent = [v for v in columns.values() if v and v not in raw.columns]
+    if absent:
+        raise ValueError("The manual plan file has no column named " + ", ".join(absent)
+                         + ". Re-map its columns on the Project page.")
     out = pd.DataFrame({k: raw[v] for k, v in columns.items() if v})
     missing = [c for c in ("hole_id", "x", "y", "z", "azimuth", "dip", "length") if c not in out]
     if missing:
@@ -92,7 +96,7 @@ def run_budgets(ctx: EvaluationContext, cm: CandidateMatrix, locked: pd.DataFram
     user_ids = set(user_locked["hole_id"].astype(str))
     runs: list[BudgetRun] = []
     prev: pd.DataFrame | None = None
-    ordered = sorted(float(b) for b in budgets)
+    ordered = sorted({float(b) for b in budgets})  # a repeated budget is run once
     for i, budget in enumerate(ordered):
         initial = None
         fixed = user_locked
@@ -107,7 +111,15 @@ def run_budgets(ctx: EvaluationContext, cm: CandidateMatrix, locked: pd.DataFram
         holes["locked"] = holes["hole_id"].astype(str).isin(user_ids)
         ev = evaluate_campaign(ctx, holes, min_angle=settings.min_angle,
                                site_cap=settings.site_cap)
-        runs.append(BudgetRun(budget, holes, ev, res.locked_overrun, res.log))
+        log = list(res.log)
+        reported = ev.totals["converted_metal"]
+        if np.isfinite(res.search_metal) and not np.isclose(res.search_metal, reported,
+                                                            rtol=1e-6, atol=1e-9):
+            # The search stores distances as float32, so a block sitting exactly on the
+            # threshold can differ. The reported figure is always the evaluated one.
+            log.append(f"Note: the search counted {res.search_metal:,.3f} metal and the "
+                       f"evaluation reports {reported:,.3f}. The reported figure is used.")
+        runs.append(BudgetRun(budget, holes, ev, res.locked_overrun, log))
         prev = holes
         if progress:
             progress(i + 1, len(ordered))

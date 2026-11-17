@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import ui_common
-from engine import pipeline
+from engine import exports, pipeline
 
 ui_common.page_setup("Scenarios")
 p = ui_common.require_project()
@@ -30,10 +30,16 @@ def goto_results() -> None:
 
 
 def recalculate(settings: dict, fallback_name: str, scenario_id: str):
+    """The finished run, or None after showing why it could not be recalculated."""
     bar = st.progress(0.0)
-    return pipeline.run_scenario(
-        p, settings.get("name", fallback_name), settings=settings, scenario_id=scenario_id,
-        progress=lambda msg, frac: bar.progress(min(frac, 1.0), text=msg))
+    try:
+        return pipeline.run_scenario(
+            p, settings.get("name", fallback_name), settings=settings, scenario_id=scenario_id,
+            progress=lambda msg, frac: bar.progress(min(frac, 1.0), text=msg))
+    except (ValueError, KeyError, FileNotFoundError) as exc:
+        bar.empty()
+        st.error(f"This scenario could not be recalculated with the current files: {exc}")
+        return None
 
 
 # --------------------------------------------------------------------------- list
@@ -41,8 +47,8 @@ def recalculate(settings: dict, fallback_name: str, scenario_id: str):
 st.subheader("Saved scenarios")
 for s in scenarios:
     sid = s["id"]
-    settings, results = p.load_scenario(sid)
-    has_results = "summary" in results and len(results["summary"]) > 0
+    settings, _ = p.load_scenario(sid, tables=[])  # settings only; result tables are large
+    has_results = s["has_results"]
     with st.container(border=True):
         flags = []
         if s["stale"]:
@@ -76,9 +82,9 @@ for s in scenarios:
                 st.warning("Enter a name for the duplicate.")
         if (s["stale"] or not has_results) and st.button("Recalculate", key=f"recalc_{sid}"):
             run = recalculate(settings, s["name"], sid)
-            st.session_state["scenario_id"] = run.scenario_id
-            st.success("Recalculated with the current input files.")
-            st.rerun()
+            if run is not None:
+                st.session_state["scenario_id"] = run.scenario_id
+                st.rerun()
 
 # --------------------------------------------------------------------------- compare
 
@@ -91,22 +97,26 @@ if len(chosen) < 2:
     st.caption("Choose at least two scenarios.")
     st.stop()
 
-loaded = {i: p.load_scenario(i) for i in chosen}
+loaded = {i: p.load_scenario(i, tables=["summary"]) for i in chosen}
 label = {i: by_id[i]["name"] + (" (STALE)" if by_id[i]["stale"] else "") for i in chosen}
 stale_names = [by_id[i]["name"] for i in chosen if by_id[i]["stale"]]
 if stale_names:
     st.warning("Stale scenarios in this comparison: " + ", ".join(stale_names)
                + ". Their inputs changed after they were run.")
 
-frames = []
+frames, shown = [], []
 for i in chosen:
     summ = loaded[i][1].get("summary")
     if summ is not None and len(summ):
         frames.append(summ.assign(scenario=label[i]))
+        # headers carry each scenario's own units and say "potentially converted"
+        unit_i = loaded[i][0].get("blocks", {}).get("grade_unit", "%")
+        shown.append(exports.summary_table(summ, unit_i).assign(scenario=label[i]))
 if frames:
     table = pd.concat(frames, ignore_index=True)
-    table = table[["scenario", *[c for c in table.columns if c != "scenario"]]]
-    st.dataframe(table, hide_index=True, use_container_width=True)
+    display = pd.concat(shown, ignore_index=True)
+    display = display[["scenario", *[c for c in display.columns if c != "scenario"]]]
+    st.dataframe(display, hide_index=True, use_container_width=True)
     unit = ui_common.metal_label(loaded[chosen[0]][0])
     fig = go.Figure()
     for name, g in table.groupby("scenario", sort=False):

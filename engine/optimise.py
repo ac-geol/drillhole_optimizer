@@ -439,14 +439,16 @@ def optimise(cm: CandidateMatrix, locked: pd.DataFrame | None, budget: float,
     deadline = t0 + settings.time_limit_s
     rng = np.random.default_rng(settings.seed)
     runs = []  # (label, per_cost, random, start cols)
+    if initial:
+        # First, so it always runs even when the time limit cuts later runs short:
+        # this is what keeps conversion from falling as the budget rises (spec 9).
+        pos = {h: i for i, h in enumerate(p.ids)}
+        start = [pos[h] for h in initial if h in pos]
+        runs.append(("warm start", True, False, start))
     runs.append(("deterministic", True, False, []))
     if settings.restarts > 1:
         runs.append(("absolute gain", False, False, []))
     runs += [(f"random top-3 #{i}", True, True, []) for i in range(settings.restarts - 2)]
-    if initial:
-        pos = {h: i for i, h in enumerate(p.ids)}
-        start = [pos[h] for h in initial if h in pos]
-        runs.append(("warm start", True, False, start))
 
     best = None
     for label, per_cost, randomised, start in runs:
