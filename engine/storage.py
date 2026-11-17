@@ -223,21 +223,31 @@ class Project:
             n += 1
         return sid
 
-    def _write_scenario(self, settings: dict, results: dict[str, pd.DataFrame]) -> str:
+    def _write_scenario(self, settings: dict, results: dict[str, pd.DataFrame],
+                        scenario_id: str | None = None) -> str:
         snap = json.loads(json_text(settings))  # deep copy, plain Python
         snap.setdefault("name", "Scenario")
         snap.setdefault("created", datetime.now(UTC).isoformat(timespec="seconds"))
         snap.setdefault("app_version", __version__)
-        sid = self._new_id(str(snap["name"]))
-        folder = self._scen_dir / sid
-        folder.mkdir(parents=True)
+        if scenario_id is None:
+            sid = self._new_id(str(snap["name"]))
+            folder = self._scen_dir / sid
+            folder.mkdir(parents=True)
+        else:  # recalculation replaces the scenario's results in place
+            sid = safe_name(scenario_id)
+            folder = self._scen_dir / sid
+            folder.mkdir(parents=True, exist_ok=True)
+            for old in folder.glob("*.parquet"):
+                old.unlink()
         for table, df in results.items():
             df.to_parquet(folder / f"{safe_name(table)}.parquet")
         _write_json(folder / "scenario.json", snap)
         return sid
 
-    def save_scenario(self, settings: dict, results: dict[str, pd.DataFrame]) -> str:
-        return self._write_scenario(settings, results)
+    def save_scenario(self, settings: dict, results: dict[str, pd.DataFrame],
+                      scenario_id: str | None = None) -> str:
+        """Save a new scenario, or overwrite ``scenario_id`` when recalculating it."""
+        return self._write_scenario(settings, results, scenario_id)
 
     def load_scenario(self, scenario_id: str) -> tuple[dict, dict[str, pd.DataFrame]]:
         folder = self._scen_dir / safe_name(scenario_id)

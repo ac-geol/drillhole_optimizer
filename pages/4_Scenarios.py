@@ -29,10 +29,10 @@ def goto_results() -> None:
         st.write("Open the **Results** page from the sidebar.")
 
 
-def recalculate(settings: dict, fallback_name: str):
+def recalculate(settings: dict, fallback_name: str, scenario_id: str):
     bar = st.progress(0.0)
     return pipeline.run_scenario(
-        p, settings.get("name", fallback_name), settings=settings,
+        p, settings.get("name", fallback_name), settings=settings, scenario_id=scenario_id,
         progress=lambda msg, frac: bar.progress(min(frac, 1.0), text=msg))
 
 
@@ -75,9 +75,9 @@ for s in scenarios:
             else:
                 st.warning("Enter a name for the duplicate.")
         if (s["stale"] or not has_results) and st.button("Recalculate", key=f"recalc_{sid}"):
-            run = recalculate(settings, s["name"])
+            run = recalculate(settings, s["name"], sid)
             st.session_state["scenario_id"] = run.scenario_id
-            st.success("Recalculated and saved as a new scenario.")
+            st.success("Recalculated with the current input files.")
             st.rerun()
 
 # --------------------------------------------------------------------------- compare

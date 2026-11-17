@@ -240,11 +240,13 @@ def blocks_for_budget(wide: pd.DataFrame, i: int) -> pd.DataFrame:
 
 
 def run_scenario(project: Project, name: str, settings: dict | None = None,
-                 progress: Callable[[str, float], None] | None = None) -> ScenarioRun:
+                 progress: Callable[[str, float], None] | None = None,
+                 scenario_id: str | None = None) -> ScenarioRun:
     """Run every budget in the planning settings and save the scenario.
 
     ``settings`` defaults to the project's current settings; pass a stored
-    scenario's settings to rerun it exactly.
+    scenario's settings to rerun it exactly. Pass ``scenario_id`` to recalculate
+    that scenario in place instead of saving a new one.
     """
     settings = copy.deepcopy(settings or project.settings)
     planning = settings.setdefault("planning", default_planning())
@@ -305,7 +307,7 @@ def run_scenario(project: Project, name: str, settings: dict | None = None,
         },
     }
     say("Saving scenario", 0.97)
-    sid = project.save_scenario(snapshot, results)
+    sid = project.save_scenario(snapshot, results, scenario_id)
     say("Done", 1.0)
     stored, stored_results = project.load_scenario(sid)
     return ScenarioRun(sid, stored, stored_results)

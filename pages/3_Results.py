@@ -45,7 +45,7 @@ def recalculate_button(key: str) -> None:
     if st.button("Recalculate", key=key, type="primary"):
         bar = st.progress(0.0)
         run = pipeline.run_scenario(
-            p, settings.get("name", "Scenario"), settings=settings,
+            p, settings.get("name", "Scenario"), settings=settings, scenario_id=sid,
             progress=lambda msg, frac: bar.progress(min(frac, 1.0), text=msg))
         st.session_state["scenario_id"] = run.scenario_id
         st.rerun()

@@ -98,5 +98,7 @@ def test_14_stale_after_input_replaced(tmp_path):
     sites.loc[0, "E"] += 10
     p.save_input("sites", _csv(sites), "SYNTHETIC_sites_v2.csv")
     assert p.is_stale(run.settings)
-    rerun = run_scenario(p, "Stale check", settings=run.settings)
+    rerun = run_scenario(p, "Stale check", settings=run.settings, scenario_id=run.scenario_id)
+    assert rerun.scenario_id == run.scenario_id
     assert not p.is_stale(rerun.settings)
+    assert [s["id"] for s in p.list_scenarios()] == [run.scenario_id]
