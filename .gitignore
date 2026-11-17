@@ -36,6 +36,9 @@ data/*
 outputs/
 results/
 
+# Runtime project folders hold real inputs, caches and results (spec section 11)
+projects/
+
 # OS / editor
 .DS_Store
 .idea/

@@ -1,0 +1,3 @@
+[server]
+# Spec section 4: raise the upload limit from 200 MB to 2 GB.
+maxUploadSize = 2048
