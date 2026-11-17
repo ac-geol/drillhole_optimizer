@@ -39,6 +39,9 @@ results/
 # Runtime project folders hold real inputs, caches and results (spec section 11)
 projects/
 
+# Agent worktrees
+.claude/worktrees/
+
 # OS / editor
 .DS_Store
 .idea/
