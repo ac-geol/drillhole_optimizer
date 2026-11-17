@@ -41,7 +41,7 @@ class OptimiserSettings:
     pair_shortlist: int = 2000
     pair_neighbours: int = 6
     local_search_passes: int = 20
-    time_limit_s: float = 120.0
+    time_limit_s: float = 600.0
     min_angle: float = 10.0
     site_cap: int = 10
 
@@ -150,8 +150,13 @@ class _Problem:
                 rows, d = _hole_distances(tree, cm.xyz, row, cm.interval, self.cap)
                 insert_distances(self.start3, rows, d)
 
-        # entries sorted by (row, distance) for the pair shortlist
-        self.by_row = np.lexsort((self.data, self.indices))
+        # Active entries: those that can still change a block's nearest three, in
+        # (row, distance) order. Adding holes only ever shrinks this set.
+        by_row = np.lexsort((self.data, self.indices))
+        r = self.indices[by_row]
+        with np.errstate(invalid="ignore"):
+            conv0 = self.start3.sum(axis=1) / 3.0 <= self.t + TOLERANCE_M
+        self.start_act = by_row[~conv0[r] & (self.data[by_row] < self.start3[r, 2])]
 
     def col(self, c):
         s, e = self.indptr[c], self.indptr[c + 1]
@@ -169,6 +174,7 @@ class _State:
         self.blocked = p.base_blocked.copy()
         self.site_count = p.base_site_count.copy()
         self.cost = 0.0  # added cost on top of locked holes
+        self.act = p.start_act
 
     def _converted(self, d3):
         with np.errstate(invalid="ignore"):
@@ -187,19 +193,26 @@ class _State:
                 & (added <= p.remaining0 - self.cost + _EPS))
 
     def gains(self):
-        """Per-candidate (converted metal gain, progress gain) if added alone."""
+        """Per-candidate (converted metal gain, progress gain) if added alone.
+
+        Only active entries are scored: an entry for a converted block, or one no
+        closer than the block's current third hole, adds nothing to either score.
+        Returns (metal gain, progress gain, newly-converted flag per active entry).
+        """
         p = self.p
-        r, d = p.indices, p.data
+        r = p.indices[self.act]
+        keep = ~self.conv[r] & (p.data[self.act] < self.dist3[r, 2])
+        self.act, r = self.act[keep], r[keep]
+        d, col = p.data[self.act], p.col_of[self.act]
         d1, d2, d3 = self.dist3[r, 0], self.dist3[r, 1], self.dist3[r, 2]
-        new_sum = d1 + d2 + np.minimum(d, d3)
         with np.errstate(invalid="ignore"):
-            new_conv = new_sum / 3.0 <= p.t + TOLERANCE_M
-        newly = new_conv & ~self.conv[r]
-        mg = np.bincount(p.col_of, weights=p.metal[r] * newly, minlength=p.n_c)
+            newly = (d1 + d2 + d) / 3.0 <= p.t + TOLERANCE_M
+        w = p.metal[r]
+        mg = np.bincount(col, weights=w * newly, minlength=p.n_c)
         cap = p.cap
-        c1, c2, c3, cd = (np.minimum(x, cap) for x in (d1, d2, d3, d))
-        dp = _progress(c1 + c2 + np.minimum(cd, c3), p.t) - _progress(c1 + c2 + c3, p.t)
-        pg = np.bincount(p.col_of, weights=p.metal[r] * dp, minlength=p.n_c)
+        c12 = np.minimum(d1, cap) + np.minimum(d2, cap)
+        dp = _progress(c12 + np.minimum(d, cap), p.t) - _progress(c12 + np.minimum(d3, cap), p.t)
+        pg = np.bincount(col, weights=w * dp, minlength=p.n_c)
         return mg, pg, newly
 
     def add(self, c, added_cost):
@@ -247,13 +260,11 @@ def _pair_shortlist(st: _State, feasible, newly):
     k, limit = p.settings.pair_neighbours, p.settings.pair_shortlist
     if limit <= 0 or k < 2:
         return np.empty((0, 2), dtype=np.int64)
+    # st.act is in (row, distance) order and aligned with `newly` from st.gains()
+    r, c = p.indices[st.act], p.col_of[st.act]
     single = np.zeros(len(p.metal), dtype=bool)
-    ok_entry = feasible[p.col_of]
-    single[p.indices[newly & ok_entry]] = True
-    target = ~st.conv & ~single
-    order = p.by_row
-    r, c, d = p.indices[order], p.col_of[order], p.data[order]
-    keep = target[r] & feasible[c] & (d < st.dist3[r, 2])
+    single[r[newly & feasible[c]]] = True
+    keep = ~single[r] & feasible[c]
     r, c = r[keep], c[keep]
     if r.size == 0:
         return np.empty((0, 2), dtype=np.int64)
