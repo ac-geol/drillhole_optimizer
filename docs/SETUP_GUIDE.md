@@ -20,10 +20,15 @@ You need:
 
 ### Step 1: Get the project folder
 
-Get the `drillhole_optimizer` folder from your team, either:
+The project lives at <https://github.com/ac-geol/drillhole_optimizer>. Get it either:
 
-- **With git:** open PowerShell and run `git clone <repository address>` in the folder where you keep your work, or
-- **As a zip file:** extract it to a simple location such as `C:\Tools\drillhole_optimizer`.
+- **With git:** open PowerShell in the folder where you keep your work and run:
+
+  ```powershell
+  git clone https://github.com/ac-geol/drillhole_optimizer.git
+  ```
+
+- **As a zip file:** on the GitHub page click **Code > Download ZIP**, then extract it to a simple location such as `C:\Tools\drillhole_optimizer`.
 
 Avoid putting the folder inside a OneDrive or SharePoint-synced folder. Syncing can lock files while the app is writing them.
 
