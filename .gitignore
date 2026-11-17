@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Environments
+.venv/
+venv/
+.env
+.env.*
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Real data: ignored. Only data/test/ is tracked.
+data/*
+!data/test/
+!data/.gitkeep
+# Common data formats anywhere outside data/test/
+*.gpkg
+*.shp
+*.dxf
+*.dm
+*.sqlite
+*.db
+!data/test/**
+
+# Outputs
+outputs/
+results/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
