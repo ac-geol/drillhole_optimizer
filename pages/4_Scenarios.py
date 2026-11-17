@@ -11,8 +11,8 @@ ui_common.page_setup("Scenarios")
 p = ui_common.require_project()
 
 st.caption("A scenario is saved automatically when a run finishes. Recalculating a scenario "
-           "re-runs it with its own stored settings and saves the result as a new scenario; "
-           "the original is kept.")
+           "re-runs it with its own stored settings and the current input files, and replaces "
+           "its results.")
 
 scenarios = p.list_scenarios()
 if not scenarios:

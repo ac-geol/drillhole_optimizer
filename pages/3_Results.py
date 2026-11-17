@@ -133,8 +133,9 @@ c = st.columns(2)
 c[0].metric(f"Eligible metal ({unit})", f"{run_info.get('eligible_metal', 0):,.1f}")
 c[1].metric(f"Baseline discrepancy metal ({unit})",
             f"{run_info.get('discrepancy_metal', 0):,.1f}")
-st.caption("Baseline discrepancy is metal in blocks whose uploaded class already differs from "
-           "their geometry class. It is reported separately and is never counted as conversion.")
+st.caption("Baseline discrepancy is metal in blocks of the source class whose existing "
+           "drilling already meets the target geometry class. It is reported separately and is "
+           "never counted as conversion.")
 
 # --------------------------------------------------------------------------- 2. curve
 

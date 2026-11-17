@@ -36,6 +36,32 @@ Run the tests with:
 uv run pytest
 ```
 
+## Try it on the synthetic demo data
+
+A ready-mapped demo project built from the SYNTHETIC files in `data\test\`:
+
+```powershell
+uv run python scripts/make_demo_project.py
+uv run streamlit run app.py
+```
+
+Then in the browser:
+
+1. **Project**: choose "SYNTHETIC demo", click **Open project**. Check the baseline preview at the bottom.
+2. **Planning**: enter a scenario name and click **Run** (about a minute on the demo data).
+3. **Results**: summary, budget curve, manual versus optimised, selected holes, 3D view and downloads.
+4. **Scenarios**: duplicate, recalculate and compare runs.
+
+To use your own data, create a new project on the Project page, upload your CSVs and map the columns.
+
+## Run time
+
+Expensive steps (baseline distances and the candidate distance table) are cached in the project's `cache\` folder, so re-runs with the same inputs skip them. Each budget is searched for up to the time limit under Planning > Advanced (default 600 s), after which the best plan found so far is used. Measure your own scale with:
+
+```powershell
+uv run python scripts/benchmark_scale.py 1000000
+```
+
 ## Layout
 
 - `engine\`: pure Python calculation engine. Never imports Streamlit.

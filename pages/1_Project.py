@@ -70,7 +70,7 @@ def _block_preview(root: str, hashes: str, blocks_json: str) -> dict:
     imp, selected = pipeline.load_blocks(project, {"blocks": json.loads(blocks_json)})
     return {"n_rows": imp.n_rows, "n_invalid": imp.n_invalid,
             "reasons": imp.invalid_reasons, "unmapped": imp.unmapped_classes,
-            "n_selected": len(selected), "summary": blockmodel.summarise_by_class(selected)}
+            "n_selected": int(selected["valid"].sum()), "summary": blockmodel.summarise_by_class(selected)}
 
 
 @st.cache_data(show_spinner="Reading the existing drilling...")
@@ -288,7 +288,7 @@ if has_blocks:
         dvals = _distinct(root, "blocks", dig, extra["domain"])
         domains = st.multiselect(
             "Domains to include (leave empty for all blocks)", dvals, key=K("domains"),
-            default=[d for d in sb.get("domains", []) if d in dvals],
+            default=[d for d in (sb.get("domains") or []) if d in dvals],
             help="Only blocks in the chosen domains count toward the objective. "
                  "Drilling is never filtered by domain.")
 
@@ -392,7 +392,7 @@ if has_manual:
                                    "is within this distance.")
     if m:
         manual_draft = {"columns": m, "positive_down": mpos, "match_tolerance": tol,
-                        "locked": list(sm.get("locked", []))}  # lock boxes live on Planning
+                        "locked": list(sm.get("locked") or [])}  # lock boxes live on Planning
 drafts["manual"] = manual_draft
 
 # 7. Save ------------------------------------------------------------------------------------
