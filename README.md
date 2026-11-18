@@ -24,7 +24,9 @@ Use PowerShell from the project folder.
    uv sync --extra dev
    ```
 
-3. Start the app. It opens in your default browser:
+3. Start the app by double-clicking **`start_app.bat`** in the project folder. It opens in your default browser. Keep the black window open while you work; closing it stops the app.
+
+   Or from PowerShell:
 
    ```powershell
    uv run streamlit run app.py

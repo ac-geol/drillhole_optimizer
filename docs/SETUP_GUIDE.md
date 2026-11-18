@@ -73,7 +73,9 @@ Every test should pass (the last line says `passed` with no `failed`). All test 
 
 ## 3. Starting and stopping the app
 
-Each time you want to use the app, open PowerShell in the project folder and run:
+Each time you want to use the app, double-click **`start_app.bat`** in the project folder. Tip: right-click it and choose **Send to > Desktop (create shortcut)** for a desktop shortcut.
+
+Or open PowerShell in the project folder and run:
 
 ```powershell
 uv run streamlit run app.py
@@ -81,8 +83,8 @@ uv run streamlit run app.py
 
 Your browser opens at `http://localhost:8501`. If it doesn't, open that address yourself.
 
-- Keep the PowerShell window open while you work. Closing it stops the app.
-- To stop the app, click the PowerShell window and press **Ctrl+C**.
+- Keep the app's window open while you work. Closing it stops the app.
+- To stop the app, close the window, or click it and press **Ctrl+C**.
 - If Windows Firewall asks about network access, you can choose **Cancel**: the app only needs your own PC.
 
 ## 4. Try it first with the demo data
